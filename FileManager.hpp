@@ -42,14 +42,12 @@ namespace sjtu {
 
     public:
         addType root_off;
-        addType head_off;
-        addType tail_off;
+
         addType append_off;
 
         struct one{
             addType root_off = -1;
-            addType head_off = -1;
-            addType tail_off = -1;
+
             addType append_off = start;
 
         };
@@ -64,7 +62,7 @@ namespace sjtu {
     private:
         void createFile() {
             file = fopen(filename, "wb");
-            root_off = head_off = tail_off = -1;
+            root_off = -1;
             append_off = start;
             one b;
 
@@ -81,8 +79,6 @@ namespace sjtu {
                 file = fopen(filename, "r+b");
                 one b;
                 fread(&b,sizeof(one),1,file);
-                head_off = b.head_off;
-                tail_off = b.tail_off;
                 root_off = b.root_off;
                 append_off = b.append_off;
 
@@ -93,7 +89,7 @@ namespace sjtu {
         FileManager() {
             filename[0] = '\0';
             isOpened = false;
-            root_off = head_off = tail_off = -1;
+            root_off  = -1;
             append_off = start;
             file = nullptr;
         }
@@ -130,15 +126,13 @@ namespace sjtu {
             } else {
                 fseek(file, 0, SEEK_SET);
                 one b;
-                b.head_off = head_off;
                 b.root_off = root_off;
-                b.tail_off = tail_off;
                 b.append_off = append_off;
                 fwrite(&b,sizeof(one),1,file);
 
 
                 fclose(file);
-                root_off = head_off = tail_off = -1;
+                root_off  = -1;
                 append_off = start;
                 file = nullptr;
                 isOpened = false;
@@ -150,7 +144,7 @@ namespace sjtu {
             if (!isOpened) return false;
             else {
                 fclose(file);
-                root_off = head_off = tail_off = -1;
+                root_off = -1;
                 append_off = start;
                 file = fopen(filename, "w+");
                 fclose(file);
@@ -196,12 +190,7 @@ namespace sjtu {
             pos+= sizeof(Value_Type)*V_size;
             memcpy(ret.childs.vec, a.mem + pos*sizeof(char),  sizeof(addType)*Ch_size);
             pos+= sizeof(addType)*Ch_size;
-            if(pos > 4096) {std::cout<<"wrong! "<<pos<<'\n';
-            std::cout<<"? "<<sizeof(Key_Type) <<' '<<K_size<<'\n';
-            std::cout<<"? "<<sizeof(Value_Type) <<' '<<V_size<<'\n';
-            std::cout<<"? "<<sizeof(addType) <<' '<<Ch_size<<'\n';
 
-            system("pause");}
         }
 
         bool get_next_block(const Node &cur, Node &ret) {
@@ -219,23 +208,6 @@ namespace sjtu {
             return true;
         }
 
-        bool get_head(Node &ret) {
-            if (head_off == -1) return false;
-            if (head_off == 0)
-                get_block(tree_utility_byte, ret);
-            else
-                get_block(head_off, ret);
-            return true;
-        }
-
-        bool get_tail(Node &ret) {
-            if (tail_off == -1) return false;
-            if (tail_off == 0)
-                get_block(tree_utility_byte, ret);
-            else
-                get_block(tail_off, ret);
-            return true;
-        }
 
         void append_block(Node &ret, bool isLeaf) {
             ret.clear();
@@ -275,24 +247,7 @@ namespace sjtu {
             pos+=now.vals.size()*sizeof(Value_Type);
             memcpy(a.mem+pos,now.childs.vec,now.childs.size()*sizeof(addType));
             pos+=now.childs.size()*sizeof(addType);
-            /*
-            for(int i = 0; i < now.keys.size(); i++)
-            {
-                memcpy(a.mem + pos, &now.keys[i], sizeof(Key_Type));
-                pos += sizeof(Key_Type);
-            }
-            for(int i = 0; i < now.vals.size(); i++)
-            {
-                memcpy(a.mem + pos, &now.vals[i], sizeof(Value_Type));
-                pos += sizeof(Value_Type);
-            }
 
-            for(int i = 0; i < now.childs.size(); i++)
-            {
-                memcpy(a.mem + pos, &now.childs[i], sizeof(addType));
-                pos += sizeof(addType);
-            }
-*/
              fwrite(&a, sizeof(two), 1, file);
         }
 
@@ -304,63 +259,9 @@ namespace sjtu {
             return root_off;
         }
 
-        sjtu::vector<Value_Type> traverse_multi(const Key_Type &K) {
-            sjtu::vector<Value_Type> ans;
-            if (head_off == -1) {
-                return ans;
-            }
-            Node now;
-            get_block(head_off, now);
-            while (true) {
-                if (Cmp(now.keys[now.keys.size() - 1], K)) {
-                    if (now.next != -1)
-                        get_block(now.next, now);
-                    else return ans;
-                } else {
-                    int i;
-                    for (i = 0; i < now.keys.size(); ++i) {
-                        if (Equal(now.keys[i], K)) break;
-                    }
-                    --i;
-                    while (true) {
-                        i++;
-                        if (!Equal(now.keys[i], K)) break;
-                        ans.push_back(now.vals[i]);
-                        if (i == now.keys.size() - 1) {
-                            if (now.next == -1) {
-                                return ans;
-                            }
-                            get_block(now.next, now);
-                            i = -1;
-                        }
-                    }
-                    break;
-                }
 
-            }
-            return ans;
-        }
 
-        void traverse() {
-            if (head_off == -1) {
-                std::cout << "empty!\n";
-                return;
-            }
-            std::cout << root_off << "root_off\n";
-            Node now;
-            get_block(head_off, now);
-            int ans = 0;
 
-            while (true) {
-                for (int i = 0; i < now.keys.size(); ++i) {
-                    ans++;
-                }
-                if (now.next == -1)
-                    break;
-                get_block(now.next, now);
-            }
-            std::cout << ans;
-        }
     };
 };
 
