@@ -518,7 +518,7 @@ namespace sjtu {
                         newRoot.childs.push_back(newLeaf.address);          //question
                         newRoot.keys.push_back(newLeaf.keys[0]);
                         bm.root_off = newRoot.address;
-                        bm.write_root();
+
                         bm.write_block(root);
                         bm.write_block(newLeaf);
                         bm.write_block(newRoot);
@@ -550,7 +550,7 @@ namespace sjtu {
                         newRoot.childs.push_back(newBranch.address);
                         newRoot.keys.push_back(mid_key);
                         bm.root_off = newRoot.address;
-                        bm.write_root();
+
                         bm.write_block(root);
                         bm.write_block(newBranch);
                         bm.write_block(newRoot);
@@ -587,7 +587,6 @@ namespace sjtu {
                 {
                     if (root.keys.size() == 0) {
                         bm.root_off = -1;
-                        bm.write_root();
                     }
                     if (ret_info.modified)
                         bm.write_block(root);
@@ -595,7 +594,6 @@ namespace sjtu {
                     if (root.childs.size() == 1)   /**   减小树高*/
                     {
                         bm.root_off = root.childs[0];
-                        bm.write_root();
                     } else if (ret_info.modified)
                         bm.write_block(root);
                 }
