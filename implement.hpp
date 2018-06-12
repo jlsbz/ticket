@@ -263,6 +263,27 @@ namespace arya {
         return true;
     }
 
+    bool queryAllTickets(string const &loc1, string const &loc2, string const &catalog) {
+        static const string date = "2018-06-12";
+        int len = catalog.length(), tot = 0;
+        trainInfo q[sjtu::MAX_DIRECT];
+        for (int i = 0; i < len; ++i) {
+            char cat = catalog[i];
+            auto allTrain = direct.find_multi(sjtu::tuple3<string, string, char>(loc1, loc2, cat));
+            for (int j = 0; j < allTrain.size(); ++j) {
+                train tr = sale.find(allTrain[j]).second;
+                sjtu::vector<int> ret;
+                q[++tot] = trainInfo(tr, ret);
+            }
+        }
+        sort(q + 1, q + 1 + tot, cmp);
+        std::cout << tot << std::endl;
+        for(int i = 1; i <= tot; ++i) {
+            printQueryTicket(q[i].first, loc1, loc2, date, q[i].second);
+        }
+        return true;
+    }
+
     Time calTime(train const &tr1, train const &tr2, string const &loc0, string const &loc1, string const &loc2) {
         Time t[4];
         for (int i = 0; i < tr1.stationNum; ++i) {

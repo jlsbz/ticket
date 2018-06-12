@@ -72,6 +72,15 @@ void queryTicket()
         std::cout << -1 << std::endl;
 }
 
+///query tickets without date
+void queryAllTickets()
+{
+    string loc1, loc2, catalog;
+    std::cin >> loc1 >> loc2 >> catalog;
+    if(!queryAllTickets(loc1, loc2, catalog))
+        std::cout << -1 << std::endl;
+}
+
 void queryTransfer()
 {
     string loc1, loc2, date, catalog;
