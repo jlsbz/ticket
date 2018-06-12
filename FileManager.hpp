@@ -42,7 +42,6 @@ namespace sjtu {
 
     public:
         addType root_off;
-
         addType append_off;
 
         struct one{
@@ -160,6 +159,12 @@ namespace sjtu {
             return isOpened;
         }
 
+
+
+
+
+
+
         void get_block(addType offset, Node &ret) {
             ret.address = offset;
             two a;
@@ -214,10 +219,16 @@ namespace sjtu {
             ret.address = append_off;
             ret.isLeaf = isLeaf;
             append_off += BlockSize;
+            fseek(file,4,SEEK_SET);
+            fwrite(&x,sizeof(addType),1,file);
         }
 
 
-
+        void write_root()
+        {
+            fseek(file,0,SEEK_SET);
+            fwrite(&root_off,sizeof(addType),1,file);
+        }
 
 
 
