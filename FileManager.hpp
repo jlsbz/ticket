@@ -220,7 +220,7 @@ namespace sjtu {
             ret.isLeaf = isLeaf;
             append_off += BlockSize;
             fseek(file,4,SEEK_SET);
-            fwrite(&x,sizeof(addType),1,file);
+            fwrite(&append_off,sizeof(addType),1,file);
         }
 
 
