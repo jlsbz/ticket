@@ -1,268 +1,697 @@
-#ifndef FILEMANAGER_H
-#define FILEMANAGER_H
+#ifndef BPLUSTREE_H
+#define BPLUSTREE_H
 
-#include <cstring>
-#include "BPlusTree.hpp"
-#include "constant.h"
+#include "FileManager.hpp"
 #include "Node.hpp"
+#include <cstring>
+#include <cmath>
+
+#include "vector.hpp"
 #include "utility.hpp"
-#include "string.h"
 
-#define start 4096
+namespace sjtu
+{
+template<class Key_Type,
+         class Value_Type,
+         class Compare = std::less<Key_Type>,
+         class Compare_value = std::less<Value_Type>
+         >
+class BPlusTree
+{
+    bool Cmp(const Key_Type &x, const Key_Type &y) const        ///<
+    {
+        static Compare _cmp;
+        return _cmp(x, y);
+    }
 
-/**
- *
- * isLeaf, key number, val number, child number, then vector values sequentially.
- * finally is one addType, means the next node.
- */
-namespace sjtu {
+    bool Equal(const Key_Type &x, const Key_Type &y) const      /// ==
+    {
+        if (Cmp(x, y) || Cmp(y, x)) return 0;
+        else return 1;
+    }
 
-    template<class Key_Type,
-            class Value_Type,
-            class Compare = std::less<Key_Type>,
-            class Compare_child = std::less<addType>
-    >
-    class FileManager {
-    private:
-        typedef TreeNode<Key_Type, Value_Type> Node;
+    bool Cmp_value(const Value_Type &x, const Value_Type &y) const        ///<
+    {
+        static Compare_value _cmp;
+        return _cmp(x, y);
+    }
 
-        char filename[100];
-        FILE *file;
-        bool isOpened;
+    bool Equal_value(const Value_Type &x, const Value_Type &y) const      /// ==
+    {
+        if (Cmp_value(x, y) || Cmp_value(y, x)) return 0;
+        else return 1;
+    }
 
-        bool Cmp(const Key_Type &x, const Key_Type &y) const {       /// <
-            static Compare _cmp;
-            return _cmp(x, y);
-        }
+private:
+    typedef TreeNode<Key_Type, Value_Type> Node;
 
-        bool Equal(const Key_Type &x, const Key_Type &y) const {     /// ==
-            if ((Cmp(x, y) || Cmp(y, x))) return 0;
-            else return 1;
-        }
+    struct Judge
+    {
+        bool success;
+        bool modified;
+        Judge(bool a = false, bool b = false) : success(a), modified(b) {}
+    };
 
-    public:
-        addType root_off;
+private:
+    char filename[100];
+    int branch_degree, leaf_degree;
+    int half_branch_degree, half_leaf_degree;
+    int K_byte, V_byte, A_byte; /**     size of   key_byte, value_byte, Addtype_byte         */
 
-        addType append_off;
+    Node pool[20];
+public:
 
-        struct one{
-            addType root_off = -1;
+    int cnt;    /**    记录pool的num     */
+    FileManager<Key_Type, Value_Type> bm;
 
-            addType append_off = start;
-
-        };
-
-        struct two{
-            char mem[4096];
-        };
-        //two a;
+private:
 
 
+    Judge erase_node(Node &now, const Key_Type &K)
+    {
 
-    private:
-        void createFile() {
-            file = fopen(filename, "wb");
-            root_off = -1;
-            append_off = start;
-            one b;
+        if (now.isLeaf)
+        {
+            int del_pos = now.search_exact(K);
 
-            fwrite(&b,sizeof(one),1,file);
-            fclose(file);
-        }
-
-        void init() {
-            file = fopen(filename, "r");
-            if (file == nullptr) {
-                createFile();
-                file = fopen(filename, "r+b");
-            } else {
-                file = fopen(filename, "r+b");
-                one b;
-                fread(&b,sizeof(one),1,file);
-                root_off = b.root_off;
-                append_off = b.append_off;
-
+            if (del_pos == -1)
+                return Judge(false, false);
+            else
+            {
+                now.keys.erase(del_pos);
+                now.vals.erase(del_pos);
+                return Judge(true, true);
             }
         }
+        else
+        {
+            Node &ch = pool[cnt++];
+            ch.clear();
+            int ch_pos = find_child(now, K, ch);
+            Judge judge_info = erase_node(ch, K);
+            if (!judge_info.success)
+            {
+                cnt--;
+                return Judge(false, false);
+            }
+            if (ch.isLeaf)
+            {
+                if (ch.keys.size() >= half_leaf_degree)
+                {
+                    bm.write_block(ch);
+                    cnt--;
+                    return Judge(true, false);
+                }
+                /**  大于一半有东西直接返回并写入 ，否则开始骚操作     */
 
-    public:
-        FileManager() {
-            filename[0] = '\0';
-            isOpened = false;
-            root_off  = -1;
-            append_off = start;
-            file = nullptr;
-        }
+                else
+                {
+                    Node &neigh = pool[cnt++];
+                    int neigh_pos, key_pos;
+                    Node *l_node, *r_node;
+                    if (ch_pos == now.childs.size() - 1)
+                    {
+                        bm.get_block(now.childs[now.childs.size() - 2], neigh);
+                        neigh_pos = now.childs.size() - 2;
+                    }
+                    else
+                    {
+                        bm.get_block(now.childs[ch_pos + 1], neigh);
+                        neigh_pos = ch_pos + 1;
+                    }
 
-        ~FileManager() {
-            if (isOpened) {
-                close_file();
+
+
+                    if (ch.keys.size() + neigh.keys.size() <= leaf_degree)
+                    {
+                        if (ch_pos < neigh_pos)
+                        {
+                            key_pos = ch_pos;
+                            l_node = &ch;
+                            r_node = &neigh;
+                        }
+                        else
+                        {
+                            key_pos = neigh_pos;
+                            l_node = &neigh;
+                            r_node = &ch;
+                        }
+
+                        l_node->next = r_node->next;
+
+                        for (int i = 0; i < r_node->keys.size(); ++i)
+                        {
+                            l_node->keys.push_back(r_node->keys[i]);
+                            l_node->vals.push_back(r_node->vals[i]);
+                        }
+                        now.keys.erase(key_pos);
+                        now.childs.erase(key_pos + 1);
+                        bm.write_block(*l_node);
+                        cnt -= 2;
+                        return Judge(true, true);
+                    }
+                    else                               /**   重新分配      */
+                    {
+                        if (neigh_pos < ch_pos)
+                        {
+                            while (ch.keys.size() < half_leaf_degree)
+                            {
+                                Key_Type    key_shift = neigh.keys.back();
+                                Value_Type  val_shift = neigh.vals.back();
+
+                                neigh.keys.pop_back();
+                                neigh.vals.pop_back();
+
+                                ch.keys.insert(0, key_shift);
+                                ch.vals.insert(0, val_shift);
+
+                                now.keys[key_pos] = ch.keys[0];
+                            }
+                            bm.write_block(ch);
+                            bm.write_block(neigh);
+                            cnt -= 2;
+                            return Judge(true, true);
+                        }
+                        else
+                        {
+                            while (ch.keys.size() < half_leaf_degree)
+                            {
+                                Key_Type    key_shift = neigh.keys.front();
+                                Value_Type  val_shift = neigh.vals.front();
+                                neigh.keys.erase(0);
+                                neigh.vals.erase(0);
+                                ch.keys.push_back(key_shift);
+                                ch.vals.push_back(val_shift);
+                                now.keys[key_pos] = neigh.keys[0];
+                            }
+                            bm.write_block(ch);
+                            bm.write_block(neigh);
+                            cnt -= 2;
+                            return Judge(true, true);
+                        }
+                    }
+                }
+            }
+            /**   子节点非叶子节点      */
+            else
+            {
+                if (ch.childs.size() >= half_branch_degree)
+                {
+                    if (judge_info.modified)    bm.write_block(ch);
+                    cnt--;
+                    return Judge(true, false);
+                }
+                else
+                {
+                    Node &neigh = pool[cnt++];
+                    int neigh_pos;
+                    int key_pos;
+                    Node *l_node, *r_node;
+
+                    if (ch_pos == now.childs.size() - 1)
+                    {
+                        bm.get_block(now.childs[now.childs.size() - 2], neigh);
+                        neigh_pos = now.childs.size() - (int) 2;
+                    }
+                    else
+                    {
+                        bm.get_block(now.childs[ch_pos + 1], neigh);
+                        neigh_pos = ch_pos + 1;
+                    }
+                    Key_Type Key = now.keys[key_pos];
+                    if (ch.childs.size() + neigh.keys.size() <= branch_degree)
+                    {
+                        if (ch_pos < neigh_pos)
+                        {
+                            key_pos = ch_pos;
+                            l_node = &ch;
+                            r_node = &neigh;
+                        }
+                        else
+                        {
+                            key_pos = neigh_pos;
+                            l_node = &neigh;
+                            r_node = &ch;
+                        }
+                        l_node->keys.push_back(Key);
+                        for (int i = 0; i < r_node->keys.size(); ++i)
+                            l_node->keys.push_back(r_node->keys[i]);
+                        for (int i = 0; i < r_node->childs.size(); ++i)
+                            l_node->childs.push_back(r_node->childs[i]);
+                        now.keys.erase(key_pos);
+                        now.childs.erase(key_pos + (int) 1);
+                        bm.write_block(*l_node);
+                        bm.write_block(*r_node);
+                        cnt -= 2;
+                        return Judge(true, true);
+                    }
+                    else
+                    {
+                        if (neigh_pos < ch_pos)
+                        {
+                            while (ch.childs.size() < half_branch_degree)
+                            {
+                                Key_Type key_shift = neigh.keys.back();
+                                addType child_shift = neigh.childs.back();
+                                neigh.keys.pop_back();
+                                neigh.childs.pop_back();
+                                ch.keys.insert(0, Key);
+                                ch.childs.insert(0, child_shift);
+                                now.keys[key_pos] = key_shift;
+                            }
+                            bm.write_block(ch);
+                            bm.write_block(neigh);
+                            cnt -= 2;
+                            return Judge(true, true);
+                        }
+                        else
+                        {
+                            while (ch.childs.size() >= half_branch_degree)
+                            {
+                                Key_Type key_shift = neigh.keys.front();
+                                addType child_shift = neigh.childs.front();
+                                neigh.keys.erase(0);
+                                neigh.childs.erase(0);
+                                ch.keys.push_back(key_shift);
+                                ch.childs.push_back(child_shift);
+                                now.keys[key_pos] = key_shift;
+                            }
+                            bm.write_block(ch);
+                            bm.write_block(neigh);
+                            cnt -= 2;
+                            return Judge(true, true);
+                        }
+                    }
+                }
             }
         }
+    }
 
-        void set_fileName(const char *fname) {
-            strcpy(filename, fname);
-        }
+    Key_Type split_branch(Node &B, Node &B_next)
+    {
+        int mid = half_branch_degree;
+        Key_Type mid_key = B.keys[mid - 1];
 
-        void clear_fileName() {
-            filename[0] = '\0';
-        }
+        B_next.childs.spilt(B.childs, mid, B.childs.size());
+        B_next.keys.spilt(B.keys, mid, B.keys.size());
 
-        bool open_file() {
+        B.childs.change_len(mid);
+        B.keys.change_len(mid - 1);
+        return mid_key;
+    }
 
-            if (isOpened) {
-                return false;
-            } else {
-                init();
-                isOpened = true;
-                return true;
-            }
-        }
+    void split_leaf(Node &L, Node &L_next)
+    {
 
-        bool close_file() {
-            if (!isOpened) {
-                std::cout << "false!";
-                return false;
-            } else {
-                fseek(file, 0, SEEK_SET);
-                one b;
-                b.root_off = root_off;
-                b.append_off = append_off;
-                fwrite(&b,sizeof(one),1,file);
+        L_next.keys.spilt(L.keys, L.keys.size() / 2, L.keys.size());
+        L_next.vals.spilt(L.vals, L.vals.size() / 2, L.vals.size());
+        L.keys.change_len(L.keys.size() / 2);
+        L.vals.change_len(L.vals.size() / 2);
+    }
 
-
-                fclose(file);
-                root_off  = -1;
-                append_off = start;
-                file = nullptr;
-                isOpened = false;
-                return true;
-            }
-        }
-
-        bool clean() {
-            if (!isOpened) return false;
-            else {
-                fclose(file);
-                root_off = -1;
-                append_off = start;
-                file = fopen(filename, "w+");
-                fclose(file);
-                file = fopen(filename, "wb+");
-                fseek(file, 0, SEEK_SET);
-                one b;
-                fwrite(&b,sizeof(one),1,file);
-                return true;
-            }
-        }
-
-        bool is_opened() {
-            return isOpened;
-        }
-
-        void get_block(addType offset, Node &ret) {
-            ret.address = offset;
-            two a;
-            int pos = 0;
-            fseek(file, offset, SEEK_SET);
-            fread(&a, sizeof(two), 1, file);
-
-            short K_size ,V_size, Ch_size;
-
-
-            memcpy(&ret.isLeaf, a.mem +pos*sizeof(char),1);
-            pos+=1;
-            memcpy(&ret.next, a.mem + pos*sizeof(char), 4);
-            pos+=4;
-            memcpy(&K_size, a.mem + pos*sizeof(char), 2);
-            pos+=2;
-            memcpy(&V_size, a.mem + pos*sizeof(char), 2);
-            pos+=2;
-            memcpy(&Ch_size, a.mem + pos*sizeof(char), 2);
-            pos+=2;
-
-            ret.keys.shorten_len(K_size);
-            ret.vals.shorten_len(V_size);
-            ret.childs.shorten_len(Ch_size);
-            memcpy(ret.keys.vec, a.mem + pos*sizeof(char),  sizeof(Key_Type)*K_size);
-            pos+= sizeof(Key_Type)*K_size;
-            memcpy(ret.vals.vec, a.mem + pos*sizeof(char),  sizeof(Value_Type)*V_size);
-            pos+= sizeof(Value_Type)*V_size;
-            memcpy(ret.childs.vec, a.mem + pos*sizeof(char),  sizeof(addType)*Ch_size);
-            pos+= sizeof(addType)*Ch_size;
-
-        }
-
-        bool get_next_block(const Node &cur, Node &ret) {
-            if (cur.next == -1)
-                return false;
-            else {
-                get_block(cur.next, ret);
-                return true;
-            }
-        }
-
-        bool get_root(Node &ret) {
-            if (root_off == -1) return false;
-            else  get_block(root_off, ret);
+    bool insert_in_leaf(Node &now, const Key_Type &K, const Value_Type &V)
+    {
+        int i = now.search_sup(K);
+        if (i == -1)
+        {
+            now.keys.push_back(K);
+            now.vals.push_back(V);
             return true;
         }
+        now.keys.insert(i, K);
+        now.vals.insert(i, V);
+        return true;
+    }
+
+    Judge insert_node(Node &now, const Key_Type &K, const Value_Type &V)
+    {
+        if (now.isLeaf)
+        {
+            bool suc = insert_in_leaf(now, K, V);
+            return Judge(suc, suc);
+        }
+        else
+        {
+            Node &ch = pool[cnt++];
+            int ch_pos = find_child(now, K, ch);
+            Judge judge_info = insert_node(ch, K, V);
+            if (!judge_info.success)
+            {
+                cnt--;
+                return Judge(false, false);                     /**并不存在这种情况*/
+            }
+            if (ch.isLeaf)
+            {
+                if (ch.keys.size() > leaf_degree)
+                {
+                    Node &newLeaf = pool[cnt++];
+                    bm.app_block(newLeaf, true);
+
+                    split_leaf(ch, newLeaf);
+                    newLeaf.next = ch.next;
+                    ch.next = newLeaf.address;
+                    now.childs.insert(ch_pos + 1, newLeaf.address);
+                    now.keys.insert(ch_pos, newLeaf.keys[0]);
+                    bm.write_block(ch);
+                    bm.write_block(newLeaf);
+                    cnt -= 2;
+                    return Judge(true, true);
+                }
+                else
+                {
+                    bm.write_block(ch);
+                    cnt--;
+                    return Judge(true, false);
+                }
+            }
+            else
+            {
+                if (ch.childs.size() > branch_degree)
+                {
+                    Node &newBranch = pool[cnt++];
+                    bm.app_block(newBranch, false);
+
+                    Key_Type mid_key = split_branch(ch, newBranch);
+                    now.childs.insert(ch_pos + 1, newBranch.address);
+                    now.keys.insert(ch_pos, mid_key);
+
+                    bm.write_block(ch);
+                    bm.write_block(newBranch);
+                    cnt -= 2;
+                    return Judge(true, true);
+                }
+                else
+                {
+                    bm.write_block(ch);
+                    cnt--;
+                    return Judge(true, false);
+                }
+            }
+        }
+    }
+
+    int find_child(Node &now, const Key_Type K, Node &child)
+    {
+        int i = now.search_sup(K);
+        if (i == -1)
+        {
+            bm.get_block(now.childs.back(), child);
+            return now.childs.size() - 1;
+        }
+        else
+        {
+            bm.get_block(now.childs[i], child);
+            return i;
+        }
+    }
+
+    void search_to_leaf(Key_Type K, Node &now)
+    {
+        bm.get_root(now);
+        while (!now.isLeaf)
+            find_child(now, K, now);
+
+    }
+
+    int find_child_multi(Node &now, const Key_Type K)
+    {
+        int i = now.search_sup_multi(K);
+        bm.get_block(now.childs[i], now);
+        return i;
+    }
+
+    void search_to_leaf_multi(Key_Type K, Node &now)
+    {
+        bm.get_root(now);
+
+        while (!now.isLeaf)
+            find_child_multi(now, K);
+
+    }
+
+public:
+    explicit BPlusTree(const char *fname)
+    {
+        strcpy(filename, fname);
+        bm.set_fileName(fname);
+
+        K_byte = sizeof(Key_Type), V_byte = sizeof(Value_Type), A_byte = sizeof(addType);
+        cnt = 0;
+
+        leaf_degree = (BlockSize - node_utility_byte) / (K_byte + V_byte);
+        branch_degree = (BlockSize - node_utility_byte) / (A_byte + K_byte);
+        half_branch_degree = (int) ceil(branch_degree / 2.0);
+        half_leaf_degree = (int) ceil(leaf_degree / 2.0);
+    }
+
+    ~BPlusTree()
+    {
+        if (bm.is_opened())
+            bm.close_file();
+    }
+
+    bool clean()
+    {
+        if (!bm.is_opened()) return false;
+        else
+        {
+            for (int i = 0; i < cnt; i++)
+                pool[i].clear();
+
+            cnt = 0;
+            bm.clean();
+            return true;
+        }
+    }
+
+    bool open_file()
+    {
+        return bm.open_file();
+    }
+
+    bool close_file()
+    {
+        return bm.close_file();
+    }
+
+    sjtu::vector<Value_Type> find_multi(const Key_Type &K)      /**找寻 key 为 K 的所有元素*/
+    {
+        sjtu::vector<Value_Type> ans;
+        if (!find(K).first)
+            return ans;
+        Node &now = pool[cnt++];
+        search_to_leaf_multi(K, now);
+        int i = now.search_exact(K);
+        cnt--;
+        if (i == -1)
+        {
+            if (now.next == -1)
+                return ans;
+            bm.get_block(now.next, now);
+            i = now.search_exact(K);
+            if (i == -1)
+                return ans;
+
+        }
+        i--;
+        while (true)
+        {
+            i++;
+            if (!Equal(now.keys[i], K)) break;
+            ans.push_back(now.vals[i]);
+            if (i == now.keys.size() - 1)
+            {
+                if (now.next == -1)
+                {
+                    return ans;
+                }
+                bm.get_block(now.next, now);
+                i = -1;
+            }
+        }
+        return ans;
+    }
+
+    pair<bool, Value_Type> find(const Key_Type &K)
+    {
+        Node &now = pool[cnt++];
+        search_to_leaf(K, now);
+        int i = now.search_exact(K);
+        cnt--;
+        if (i == -1)
+            return pair<bool, Value_Type>(false, Value_Type());
+        else
+            return pair<bool, Value_Type>(true, now.vals[i]);
+    }
+
+    bool modify(Key_Type K, Value_Type V)
+    {
+        Node &leafNode = pool[cnt++];
+
+        search_to_leaf(K, leafNode);
+        int key_pos = leafNode.search_exact(K);
+
+        if (key_pos == -1)
+        {
+            cnt--;
+            return false;
+        }
+        else
+        {
+            leafNode.vals[key_pos] = V;
+            bm.write_block(leafNode);
+            cnt--;
+            return true;
+        }
+    }
+
+    bool insert(const Key_Type &K, const Value_Type &V)
+    {
+        Node &root = pool[cnt++];
+
+        if (bm.root_off == -1)
+        {
+            bm.app_block(root, true);     ///什么都没有
+
+            root.keys.push_back(K);
+            root.vals.push_back(V);
+
+            bm.set_root(root.address);
+            bm.write_block(root);
+
+            cnt--;
+            return true;
+        }
+        bm.get_root(root);
+
+        Judge judge_info = insert_node(root, K, V);
+
+        if (!judge_info.success)
+        {
+            cnt--;
+            return false;                               /** 真的false就很尴尬了  ps: 实际上并不会出现false*/
+        }
+        /**考虑是否调整树 spilt 或者加树高*/
+        else
+        {
+            if (root.isLeaf)
+            {
+
+                if (root.keys.size() > leaf_degree)         /**新根*/
+                {
+                    Node &newLeaf = pool[cnt++];
+                    Node &newRoot = pool[cnt++];
+                    bm.app_block(newLeaf, true);
+
+                    split_leaf(root, newLeaf);
+
+                    newLeaf.next = root.next;
+                    root.next = newLeaf.address;
 
 
-        void append_block(Node &ret, bool isLeaf) {
-            ret.clear();
-            ret.address = append_off;
-            ret.isLeaf = isLeaf;
-            append_off += BlockSize;
+                    bm.app_block(newRoot, false);
+                    newRoot.childs.push_back(root.address);
+                    newRoot.childs.push_back(newLeaf.address);
+                    newRoot.keys.push_back(newLeaf.keys[0]);
+                    bm.root_off = newRoot.address;
+
+                    bm.write_block(root);
+                    bm.write_block(newLeaf);
+                    bm.write_block(newRoot);
+                    cnt -= 3;
+                    return true;
+                }
+                /**否则直接写进去就好了*/
+                else
+                {
+                    if (judge_info.modified)
+                    {
+                        bm.write_block(root);
+                    }
+                    cnt--;
+                    return true;
+                }
+            }
+            else
+            {
+
+                if (root.childs.size() > branch_degree)         /**spilt*/
+                {
+                    Node &newBranch = pool[cnt++];
+                    Node &newRoot = pool[cnt++];
+                    Key_Type mid_key;
+
+                    bm.app_block(newBranch, false);
+
+                    mid_key = split_branch(root, newBranch);
+
+                    bm.app_block(newRoot, false);
+                    newRoot.childs.push_back(root.address);
+                    newRoot.childs.push_back(newBranch.address);
+                    newRoot.keys.push_back(mid_key);
+                    bm.root_off = newRoot.address;
+
+                    bm.write_block(root);
+                    bm.write_block(newBranch);
+                    bm.write_block(newRoot);
+                    cnt -= 3;
+                    return true;
+                }
+                else
+                {
+                    if (judge_info.modified)
+                    {
+                        bm.write_block(root);
+                    }
+                    cnt--;
+                    return true;
+                }
+
+            }
+        }
+    }
+
+    bool erase(Key_Type K)
+    {
+        if (bm.root_off == -1)
+        {
+            return false;
         }
 
+        Node &root = pool[cnt++];
+        Judge judge_info;
+        bm.get_root(root);
+        judge_info = erase_node(root, K);
 
-
-
-
-
-        void write_block(Node &now) {
-
-            two a;
-            fseek(file,now.address,SEEK_SET);
-
-
-            short K_size = now.keys.size();
-            short V_size = now.vals.size();
-            short Ch_size = now.childs.size();
-            int pos = 0;
-            memcpy(a.mem + pos, &now.isLeaf, sizeof(bool));
-            pos++;
-            memcpy(a.mem + pos, &now.next, 4);
-            pos+=4;
-            memcpy(a.mem + pos, &K_size, 2);
-            pos+=2;
-            memcpy(a.mem + pos, &V_size, 2);
-            pos+=2;
-            memcpy(a.mem + pos, &Ch_size, 2);
-            pos+=2;
-            memcpy(a.mem+pos,now.keys.vec,now.keys.size()*sizeof(Key_Type));
-            pos+=now.keys.size()*sizeof(Key_Type);
-            memcpy(a.mem+pos,now.vals.vec,now.vals.size()*sizeof(Value_Type));
-            pos+=now.vals.size()*sizeof(Value_Type);
-            memcpy(a.mem+pos,now.childs.vec,now.childs.size()*sizeof(addType));
-            pos+=now.childs.size()*sizeof(addType);
-
-             fwrite(&a, sizeof(two), 1, file);
+        if (!judge_info.success)
+        {
+            cnt--;
+            return false;
         }
-
-        void set_root(addType offset) {
-            root_off = offset;
+        else
+        {
+            if (root.isLeaf)                     /**  把b+树置为空    */
+            {
+                if (root.keys.size() == 0)
+                {
+                    bm.root_off = -1;
+                }
+                if (judge_info.modified)
+                    bm.write_block(root);
+            }
+            else
+            {
+                if (root.childs.size() == 1)        /**   换根，减小树高*/
+                {
+                    bm.root_off = root.childs[0];
+                }
+                else if (judge_info.modified)
+                    bm.write_block(root);
+            }
+            cnt--;
+            return true;
         }
-
-        addType get_root() {
-            return root_off;
-        }
-
-
-
-
-    };
+    }
 };
-
+};
 #endif
