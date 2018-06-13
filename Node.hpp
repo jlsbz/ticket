@@ -53,9 +53,7 @@ namespace sjtu {
         }
 
         TreeNode(const TreeNode &other) noexcept:
-                childs(),
-                vals(),
-                keys() {
+                childs(),vals(),keys() {
             address = other.address;
             next = other.next;
             isLeaf = other.isLeaf;
@@ -67,12 +65,15 @@ namespace sjtu {
         }
 
         TreeNode &operator=(const TreeNode &other) {
+            if(other == this) return *this;
             address = other.address;
-            childs = other.childs;
-            keys = other.keys;
-            vals = other.vals;
             next = other.next;
             isLeaf = other.isLeaf;
+            childs = other.childs;
+            if(isLeaf)
+                vals = other.vals;
+            else
+                keys = other.keys;
             return *this;
         }
 
@@ -111,16 +112,9 @@ namespace sjtu {
             int pos = 0;
             while (pos < keys.size() && Cmp(keys[pos], K)) pos++;
             return pos;
-
         }
 
         /**   清空node      */
-        void clear_content() {
-            childs.clear();
-            keys.clear();
-            vals.clear();
-        }
-
         void clear() {
             address = next = -1;
             isLeaf = true;
@@ -131,7 +125,7 @@ namespace sjtu {
 
         /**   找块中孩子，失败返回-1      */
         int search_child(addType child) {
-            if (childs.size() < 20) {
+            if (childs.size() < min_cmp) {
                 int i = 0;
                 while (i < childs.size() && childs[i] != child) ++i;
                 if (i == childs.size()) {
@@ -140,7 +134,7 @@ namespace sjtu {
             } else {
                 int low = 0, high = childs.size() - 1;
                 int mid;
-                while (high - low >= 20) {
+                while (high - low >= min_cmp) {
                     mid = (low + high) / 2;
                     if (childs[mid] == child)
                         return mid;
