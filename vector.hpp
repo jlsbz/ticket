@@ -12,8 +12,9 @@ namespace sjtu {
     public:
         int len;
         ElemType vec[BlockSize * 2 / sizeof(ElemType)];
-        vector():len(0) {}
-        explicit vector(const int &&size) {
+
+
+        explicit vector(const int &&size = 0) {
             len = 0;
         }
         ~vector() {
@@ -28,10 +29,12 @@ namespace sjtu {
             ++len;
         }
         void erase(const int &pos) {
+            if(pos >= len) throw(sjtu::index_out_of_bound::exception());
             for(int i = pos; i < len - 1; i++){vec[i] = vec[i+1];}
             --len;
         }
         void pop_back() {
+            if(len == 0) throw(sjtu::index_out_of_bound::exception());
             --len;
         }
         void clear() {
@@ -41,9 +44,11 @@ namespace sjtu {
             return (short)len;
         }
         ElemType &back() {
+            if(len == 0) throw(sjtu::index_out_of_bound::exception());
             return vec[len-1];
         }
         ElemType &front() {
+            if(len == 0) throw(sjtu::index_out_of_bound::exception());
             return vec[0];
         }
         vector<ElemType> &operator= (const vector<ElemType> &other) {
@@ -59,21 +64,13 @@ namespace sjtu {
         ElemType operator[] (const short &pos) const{
             return vec[pos];
         }
-        void assign(const vector<ElemType> &other, const short &left, const short &right) {
+        void spilt(const vector<ElemType> &other, const short &left, const short &right) {
             for(int i = left; i < right; i++) {
                 vec[i-left] = other.vec[i];
             }
             len = right - left;
         }
-        void read_file(FILE *&file, const short &item_num) {
-            len = item_num;
-            fread(vec, sizeof(ElemType), (size_t) len, file);
-        }
-        void write_file(FILE *&file) {
-            fwrite(vec, sizeof(ElemType), (size_t) len, file);
-        }
-
-        void shorten_len(short newLen) {
+        void change_len(short newLen) {
             len = newLen;
         }
     };
