@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <iostream>
 #include "constant.h"
+#include "exceptions.hpp"
 
 namespace sjtu {
 
