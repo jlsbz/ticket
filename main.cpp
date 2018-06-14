@@ -241,9 +241,7 @@ int main()
 {
     std::ios::sync_with_stdio(false);
     std::cin.tie(nullptr);
-//    freopen("-2.in", "r", stdin);
-//    freopen("test.out", "w", stdout);
-    const int funcNum = 17;
+    const int funcNum = 18;
     string comm;
     string opt[funcNum];
     opt[0] = string("register");
@@ -262,15 +260,17 @@ int main()
     opt[13] = string("modify_train");
     opt[14] = string("clean");
     opt[15] = string("login");
-    opt[16] = string("exit");
+    opt[16] = string("query_all_tickets");
+    opt[17] = string("exit");
     void (*func[funcNum])() = {Register, queryProfile, modifyProfile, modifyPrivilege, queryTicket, queryTransfer, buyTicket,
-                          queryOrder, refundTicket, addTrain, saleTrain, queryTrain, deleteTrain, modifyTrain, clean, login};
+                          queryOrder, refundTicket, addTrain, saleTrain, queryTrain, deleteTrain, modifyTrain, clean,
+                           queryAllTickets, login};
     init();
     while(true)
     {
         bool flag = false;
         std::cin >> comm;
-        if(comm == opt[16]) {
+        if(comm == opt[funcNum - 1]) {
             std::cout << "BYE" << std::endl;
             break;
         }
