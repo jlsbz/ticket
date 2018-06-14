@@ -440,8 +440,8 @@ public:
 
         leaf_degree = (BlockSize - node_utility_byte) / (K_byte + V_byte);
         branch_degree = (BlockSize - node_utility_byte) / (A_byte + K_byte);
-        half_branch_degree = (int) ceil(branch_degree / 2.0);
-        half_leaf_degree = (int) ceil(leaf_degree / 2.0);
+        half_branch_degree = branch_degree / 2;
+        half_leaf_degree = leaf_degree / 2;
     }
 
     ~BPlusTree()
